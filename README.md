@@ -1,81 +1,143 @@
-# Francis-Compiler
+# FinalProj Compiler（中間碼 / 三位址碼產生器）
 
-## 程式設計目標：
-完成 Francis 語言之中間碼（Intermediate language）翻譯。
-## 程式設計說明：
-此次的中間碼翻譯為是三位元碼（Three address code）。
+這是一個以 C++ 撰寫的簡易「兩階段（two-pass）」編譯器/翻譯器雛形。程式會讀取輸入檔中的類 Fortran/教學用語法（如 `PROGRAM / VARIABLE / DIMENSION / SUBROUTINE / CALL / IF / GTO / LABEL / ENP / ENS` 等），建立符號表，並將敘述轉換成「中間碼（intermediate code）」與對應的四元式/欄位表示，最後輸出成 `out_<input檔名>`。
 
-Step1：將 input 檔以換行符號（’\n’）為單位，依次讀入並儲存起來。
+> 注意：此專案依賴外部表格檔（例如 `Table1.table`、`Table2.table`…），並且目前程式內部將輸入檔名寫死為 `input1.txt`。
 
-Step2：進行 pass1，先判斷此行敘述之文法是否正確。
+---
 
-Step3：若敘述不符合文法（例如：敘述最後並非以 ’；’ 結束），則不繼續進行該行敘述之翻譯，並在儲存輸出資料的資料結構中，設定該行設為 ERROR，註明說明錯誤原因。
+## 功能概要
 
-Step4：若判斷符合文法，則以空白符號（’ ’）及 delimiter 為依據切token。
+- 讀取文字檔程式（預設 `input1.txt`）
+- Pass 1：
+  - 掃描指令與宣告
+  - 建立/更新符號表（Identifier Table）
+  - 針對 assignment / expression 產生三位址碼（3-address code）與暫存器 `T0, T1...`
+  - 支援一維/二維陣列索引的展開（部分）
+  - 產生初步輸出節點 `DATA`
+- Pass 2：
+  - 回填某些在 Pass 1 無法確定的資訊（例如 `CALL` 的符號查找）
+- 輸出：
+  - 以「行號 + (one,two,three,four) + interm」格式寫入 `out_input1.txt`（或其他輸入檔名）
 
-Step5：判斷此 token 是否為保留字，例如：PROGRAM、VARIABLE、DIMENSION、SUBROUTINE、CALL、LABEL、GTO、ENP、IF。
+---
 
-Step6：若為保留字，則進行相對應的處理，並將可以翻成中間碼的敘述先翻譯成中間碼，並設一個相對應的布林值，表示該行已完成翻譯。
+## 專案結構與重要資料結構
 
-Step7：若判斷皆非以上所述之保留字，則表示該行敘述為Assignment。
+### 主要類別
+- `class FinalProj`
+  - 封裝整個編譯流程：`readFile()` → `pass1()` → `pass2()` → `writeFile()`
 
-Step8：若此行敘述為 Assignment，會使用到 Operand stack 及 Operatorstack，將該行敘述轉為符合此次設計目標之三位元碼（Three address code），並且在沒有發生 forward reference 的情況 下，同樣可以先將該行完成中間碼翻譯。
+### DATA（輸出節點）
+`struct DATA` 會被存入 `vector<DATA> output`，代表一行中間碼/指令資訊：
 
-Step9：當 pass1 完成時，會接著進行 pass2。
+- `line`：輸出序號
+- `one/two/three/four`：四個欄位（類似四元式/指令欄位）
+  - 每個欄位是 `(table_id, index)` 的概念
+- `interm[40]`：可讀的中間碼字串
+- `done`：是否已完成回填/處理
 
-Step10：pass2 的目的為處理 forward reference 之狀況，將翻譯到一半的儲存輸出資料的資料結構從頭跑一遍，找到未完成翻譯之敘述，並根據其少的部分到 Table 5 或是輸出檔中尋找相對應的資料。
+### Symbol / Table（部分）
+- `Table0`: `T[]`（暫存器使用狀態）
+- `Table3`: `Integer_Table`
+- `Table4`: `RealNumber_Table`
+- `Table5`: `Identifier_Table`
+- `Table7`: `Information_Table`
 
-Step11：完成 2 次 pass 之後，便將儲存好的輸出資料的資料結構，依據題目要求之格式，寫入輸出檔當中。
+---
 
-## 程式撰寫函數說明：
-### initializeTable5()：
-將 Table 5 之編號(行數)先初始化好。
-### readFile()：
-讀入.txt 檔案。以換行符號為單位，讀入資料，並將其存入名為
-input 的 vector 當中，若該文件不存在，則輸出錯誤訊息。
-### pass1()：
-進行 pass1 的 function。含切 token 及判斷該 token 是否為保留字
-等功能，此 function 會使用到其他大部分的 function，為此作業
-中最主要的 function。
-### pass2()：
-完成 pass1()未完成之中間碼翻譯，為處理 forward reference。
-### checkTable( key, num ) ：
-檢查傳入的 key 是否存在於某個 table 檔案當中(由 num 決定哪個
-table)，若找到的話，就回傳該位置；若沒有找到，則回傳-1。根
-據題目規則，table 1 存放的是 delimiters； table 2 存放的是保留
-字(reserved word)。
-### error( idx ) ：
-進行錯誤處理，例如：檢查敘述最後是否以分號(；)結尾。
-### checkPunctuationkey( key ) ：
-檢查各個 operator 之優先權(precedence)順序，並回傳 key 所在
-的位置，數字越大表示優先次序越小。
-### threeAddress( idx ) ：
-將一行敘述式轉為三位元碼（Three address code）的中間碼。主要
-會使用到 Operand stack 及 Operator stack 來協助完成。
-### twoDArray()：
-將二維陣列以三位元碼（Three address code）的方式展開，會產生
-四行中間碼。根據題目範例所示，此 compiler 是採用行優先(column
-major)的方式計算記憶體位置。
-### passValue( op, oprand1, oprand2, out ) ：
-當找出每行敘述之 operand 及 operator 時，將需要翻譯的元素傳
-入此 function，若該格不需要存放資訊，則傳入 ‘#’，否則此
-function 會呼叫 findElement()，尋找對應的 table，並將其轉為輸
-出資訊，存入 node，待後續方便存入 output 的 vector。
-### machineCode( count, idx, oneArray, twoArray, behind ) ：
-將放置在 Operand stack 及 Operator stack 當中的元素，根據題目
-規則取出，並呼叫 passValue()，得到每個元素位在哪個 table 中
-的哪個位置，並加入其餘適當資訊，最後將其 push_back 進
-output 當中。
-### findElement( str, table ) ：
-檢查傳入的 str 是否存在於某個 table 檔案當中(由參數 table 決定
-哪個 table)。功能和 checkTable()相似，但除了 table1 和 table2 還
-可以檢查更多的 table，例如：過程中會需要的 Identifier
-Table(Table 5 )以及 Information Table(Table7)……。
-### hashing( str, cases, sub ) ：
-將傳入的 str 以 hashing 的方式存入 Table(由 cases 決定是哪個
-table)，其中 hashSize 最大為 100，若遇到該格以存放資料，則往
-下一格檢查，以此類推，直到找到空位。第三個傳入的參數 sub
-為因應 table 5 所需要的變數勢力範圍資訊。
-### writeFile()：
-將名為 output 的 vector 依造題目所規範的輸出格式，寫入
-output 檔當中。
+## 依賴檔案（必備）
+
+程式會在執行時讀取下列表格檔（位於執行目錄）：
+
+- `Table1.table`：指令/運算子對照表（用於 `checkTable(str, "1")`）
+- `Table2.table`：關係運算子/條件判斷對照表（用於 `checkTable(str, "2")`）
+- （其他 table 檔在程式中也有結構，但是否使用取決於你的資料與流程）
+
+> 若缺少 `Table1.table`、`Table2.table`，某些 `findElement()` 會找不到對應值，導致輸出欄位不完整或邏輯錯誤。
+
+---
+
+## 編譯與執行方式
+
+### 編譯
+```bash
+g++ -std=c++11 -O2 -o finalproj main.cpp
+```
+### 執行
+```bash
+./finalproj
+```
+執行後會：
+1. 讀入 `input1.txt`（目前程式寫死）
+2. 產生輸出檔：`out_input1.txt`
+
+---
+
+## 輸入格式（概念）
+
+此程式以「一行一敘述」為主要掃描方式，並且多數敘述必須以 `;` 結尾。
+支援/辨識的關鍵字（依 `pass1()` 解析邏輯）包含：
+
+- `PROGRAM <name>;`
+- `VARIABLE : <A,B,C...>;`
+- `DIMENSION : A( ... ), B( ... );`
+- `SUBROUTINE <name>(...) : <args...>;`
+- `CALL <name>(...);`
+- `LABEL <L1,L2,...>;`
+- `GTO <label>;`
+- `IF <id> <op> <id> ...`
+- `ENP;、ENS;`
+- 以及 assignment/expression（例如 `A = B + 3;`）
+
+---
+
+## 輸出格式
+
+輸出檔 `out_<input檔名>` 每一行大致長這樣：
+```scheme
+<line>  ( (t1,i1), (t2,i2), (t3,i3), (t4,i4) )    <intermediate string>
+```
+其中 `(t,i)` 代表「表格代號 + 表內索引」，例如：
+`t=5` 可能代表 Identifier Table（Table5）
+`t=3` 可能代表 Integer Table（Table3）或數字常數（依程式目前寫法）
+`t=0` 代表暫存器 T[]
+
+---
+
+## 程式流程說明（重要函式）
+
+- `compiler()`
+  - 主流程：讀檔、初始化、Pass1、Pass2、寫檔
+
+- `readFile()`
+  - 讀取輸入檔內容到 `vector<string> input`
+
+- `initializeTable5()`
+  - 初始化 Identifier Table 的 `loc`
+
+- `pass1()`
+  - 逐行掃描、辨識關鍵字、建立符號表
+  - 遇到 assignment/expression 時呼叫 `threeAddress()`
+
+- `threeAddress(idx, j)`
+  - 使用 `Oprand` 與 `Operator` 兩個 stack 做 expression parsing
+  - 適時呼叫 `machineCode()` 產生中間碼
+  - 嘗試處理：
+    - 一般運算：`+ - * / ^`
+    - 括號
+    - 一維/二維陣列索引（部分）
+
+- `machineCode(...)`
+  - 實際生成 `DATA node`
+  - 決定 operand 是：
+    - 常數
+    - 識別字
+    - 暫存器 `T`
+  - 產生對應的 `node.one/two/three/four` 與 `node.interm`
+
+- `pass2()`
+  - 回填 `CALL` 類指令中 subroutine 的 table index
+
+- `writeFile()`
+  - 將 `output` 寫到 `out_<fileName>`
