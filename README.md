@@ -2,7 +2,7 @@
 
 這是一個以 C++ 撰寫的簡易「兩階段（two-pass）」編譯器/翻譯器雛形。程式會讀取輸入檔中的類 Fortran/教學用語法（如 `PROGRAM / VARIABLE / DIMENSION / SUBROUTINE / CALL / IF / GTO / LABEL / ENP / ENS` 等），建立符號表，並將敘述轉換成「中間碼（intermediate code）」與對應的四元式/欄位表示，最後輸出成 `out_<input檔名>`。
 
-> 注意：此專案依賴外部表格檔（例如 `Table1.table`、`Table2.table`…），並且目前程式內部將輸入檔名寫死為 `input1.txt`。
+> 注意：此專案依賴外部表格檔（例如 `Table1.table`、`Table2.table`…）。
 
 ---
 
